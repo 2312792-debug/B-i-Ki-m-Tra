@@ -5,6 +5,11 @@ Handles physics simulation using pymunk
 
 import pymunk
 import pymunk.pygame_util
+import sys
+import os
+
+# Add parent directory to path to import settings
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from settings import GRAVITY, TILE_SIZE
 
 
