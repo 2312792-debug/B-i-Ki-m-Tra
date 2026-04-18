@@ -5,11 +5,90 @@ Handles world generation, chunk system, and pixel-based terrain
 
 import pygame
 import numpy as np
-from noise import pnoise2
+import random
+import math
 from settings import (
     WORLD_WIDTH, WORLD_HEIGHT, TILE_SIZE, CHUNK_SIZE,
     MATERIALS, MATERIAL_PROPS, UPDATE_RADIUS
 )
+
+
+class SimpleNoise:
+    """Simple permutation-based noise generator - thay thế cho thư viện noise"""
+    
+    def __init__(self, seed: int = 0):
+        self.seed = seed
+        random.seed(seed)
+        # Tạo permutation table
+        self.perm = list(range(256))
+        random.shuffle(self.perm)
+        self.perm = np.array(self.perm + self.perm)  # Double for wrapping
+    
+    def _fade(self, t: float) -> float:
+        """Smoothstep function"""
+        return t * t * t * (t * (t * 6 - 15) + 10)
+    
+    def _lerp(self, a: float, b: float, t: float) -> float:
+        """Linear interpolation"""
+        return a + t * (b - a)
+    
+    def _grad(self, hash_val: int, x: float, y: float) -> float:
+        """Calculate gradient"""
+        h = hash_val & 3
+        if h == 0:
+            return x + y
+        elif h == 1:
+            return -x + y
+        elif h == 2:
+            return x - y
+        else:
+            return -x - y
+    
+    def noise2d(self, x: float, y: float) -> float:
+        """Generate 2D noise value at (x, y)"""
+        # Grid coordinates
+        X = int(np.floor(x)) & 255
+        Y = int(np.floor(y)) & 255
+        
+        # Relative position in grid
+        x -= np.floor(x)
+        y -= np.floor(y)
+        
+        # Fade curves
+        u = self._fade(x)
+        v = self._fade(y)
+        
+        # Hash coordinates of corners
+        A = self.perm[X] + Y
+        B = self.perm[X + 1] + Y
+        
+        # Get gradients for 4 corners
+        g1 = self._grad(self.perm[A], x, y)
+        g2 = self._grad(self.perm[B], x - 1, y)
+        g3 = self._grad(self.perm[A + 1], x, y - 1)
+        g4 = self._grad(self.perm[B + 1], x - 1, y - 1)
+        
+        # Interpolate
+        return self._lerp(
+            self._lerp(g1, g2, u),
+            self._lerp(g3, g4, u),
+            v
+        )
+    
+    def octave_noise(self, x: float, y: float, octaves: int = 4, persistence: float = 0.5) -> float:
+        """Multi-octave noise for more natural terrain"""
+        total = 0.0
+        frequency = 1.0
+        amplitude = 1.0
+        max_value = 0.0
+        
+        for _ in range(octaves):
+            total += self.noise2d(x * frequency, y * frequency) * amplitude
+            max_value += amplitude
+            amplitude *= persistence
+            frequency *= 2.0
+        
+        return total / max_value
 
 
 class Chunk:
@@ -53,6 +132,8 @@ class Chunk:
     
     def generate_terrain(self, seed=0):
         """Generate procedural terrain using noise"""
+        noise_gen = SimpleNoise(seed)
+        
         for y in range(self.chunk_size):
             for x in range(self.chunk_size):
                 world_x = self.chunk_x * self.chunk_size + x
@@ -61,7 +142,7 @@ class Chunk:
                 # Generate noise value
                 nx = world_x / 200.0
                 ny = world_y / 200.0
-                noise_val = pnoise2(nx, ny, octaves=3, persistence=0.5, lacunarity=2.0, base=seed)
+                noise_val = noise_gen.octave_noise(nx, ny, octaves=3, persistence=0.5)
                 
                 # Determine material based on noise and height
                 if noise_val > 0.5:
