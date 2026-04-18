@@ -6,6 +6,7 @@ A 2D pixel physics sandbox game inspired by Noita
 import pygame
 import sys
 import random
+import math
 
 # Import game modules
 from settings import (
@@ -23,6 +24,24 @@ from systems.sand_simulation import SandSimulation
 
 
 class Game:
+    def _spawn_player(self):
+        """Spawn player at a safe position"""
+        # Tìm vị trí an toàn để spawn player
+        spawn_x = 100
+        spawn_y = 0
+        
+        # Tìm mặt đất từ trên xuống
+        for y in range(0, WORLD_HEIGHT - 50):
+            if self.world.is_solid(spawn_x, y) and self.world.is_solid(spawn_x + 20, y):
+                spawn_y = y - 40  # Spawn phía trên mặt đất
+                break
+        
+        # Nếu không tìm thấy, spawn ở vị trí mặc định an toàn
+        if spawn_y == 0:
+            spawn_y = 400
+        
+        self.player = Player(spawn_x, spawn_y)
+    
     def __init__(self):
         # Initialize renderer
         self.renderer = Renderer(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -33,8 +52,8 @@ class Game:
         # Create physics engine
         self.physics = PhysicsEngine()
         
-        # Create player
-        self.player = Player(100, 400)
+        # Create player at safe position
+        self._spawn_player()
         
         # Create combat system
         self.combat = CombatSystem()
@@ -269,8 +288,6 @@ class Game:
     
     def run(self):
         """Main game loop"""
-        import math
-        
         clock = pygame.time.Clock()
         
         while self.running:
